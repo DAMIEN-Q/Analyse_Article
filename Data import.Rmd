@@ -4,6 +4,6 @@ output: github_document
 ---
 
 ```{r}
-metadata = read.csv2("/home/rstudio/Analyse_Article/Data/SraRunTable (3).csv", header = TRUE, sep = ",")
+metadata = read.csv2("/home/rstudio/Analyse_Article/Data/SraRunTable.csv", header = TRUE, sep = ",")
 ```
 

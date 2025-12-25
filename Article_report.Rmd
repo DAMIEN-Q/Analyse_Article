@@ -1,4 +1,195 @@
 ---
-title: "R Notebook"
+title: "Analyse de données métabarcode d'un article (Damien Quemener)"
 output: github_document
 ---
+```{r}
+library(dada2)
+library(Rcpp)
+```
+
+```{r}
+path <- "~/Analyse_Article/Data"
+list.files(path)
+```
+
+```{r}
+fnFs = sort(
+  list.files(path, pattern="_1.fastq",  
+                    full.names = TRUE))
+
+fnRs <- sort(list.files(path, pattern="_2.fastq", full.names = TRUE))
+```
+
+```{r}
+sample.names <- sapply(strsplit(basename(fnFs), "_"), `[`, 1)
+```
+
+## **Visualisation des profils de qualité de lecture**
+### **Qualité de lecture Forward** ###
+```{r}
+plotQualityProfile(fnFs[1:2])
+```
+
+On observe une bonne qualité de lecture forward jusqu'à environ 240 pb
+
+## **Qualité de lecture Reverse**
+```{r}
+plotQualityProfile(fnRs[1:2])
+```
+
+Ici, la qualité de lecture reverse est la même que pour forward, c'est à dire 240 pb.
+
+## **Filtrer et Rogner**
+
+```{r}
+filtFs <- file.path(path,"filtered",
+                    paste0(sample.names,"_F_filt.fastq.gz"))
+filtRs <- file.path(path, "filtered", paste0(sample.names, "_R_filt.fastq.gz"))
+
+names(filtFs) <- sample.names
+names(filtRs) <- sample.names
+```
+
+### **Filtrage et pré-traitement des séquences** ###
+
+```{r}
+out <- filterAndTrim(fnFs, 
+                     filtFs, 
+                     fnRs, 
+                     filtRs, 
+                     truncLen=c(240,240), 
+              maxN=0, 
+              maxEE=c(2,2),
+              truncQ=2, 
+              rm.phix=TRUE, 
+              compress=TRUE, 
+              multithread=FALSE
+              )
+
+head(out) 
+```
+Le tableau montre clairement le nombre lectures avant filtrage (reads.in) et après filtrage (reads.out). Ici, on observe que la majorité des lectures est conservé (seulement environ 10 000 lectures filtrée)
+
+## **Taux d'erreur de séquençage**
+
+```{r}
+errF <- learnErrors(filtFs, multithread=TRUE)
+```
+```{r}
+errR <- learnErrors(filtRs, multithread=TRUE)
+```
+## **Visualisation des taux d'erreur** 
+
+```{r,cache=FALSE}
+plotErrors(errF, nominalQ=TRUE)
+```
+
+## **Application de l'algo de DADA2**
+
+```{r, cache=TRUE}
+dadaFs <- dada(filtFs,
+               err=errF, 
+               multithread=TRUE 
+               )
+```
+
+
+```{r, cache=TRUE}
+dadaRs <- dada(filtRs, err=errR, multithread=TRUE)
+```
+
+## **Inspection**
+
+```{r, cache=TRUE}
+dadaFs[[1]]
+```
+
+
+## **Fusion des lectures appariées**
+
+```{r, cache=TRUE}
+mergers <- mergePairs(dadaFs, 
+                      filtFs, 
+                      dadaRs, 
+                      filtRs, 
+                      verbose=TRUE 
+                      )
+head(mergers[[1]])
+```
+
+## **Construction d'une table de séquence**
+
+```{r, cache=TRUE}
+seqtab <- makeSequenceTable(mergers) 
+dim(seqtab)
+```
+
+### **Inspection de la distribution des longueurs des séquences** ###
+  
+```{r, cache=TRUE}
+table( 
+  nchar( 
+    getSequences(seqtab) 
+        ))
+```
+
+
+## **Supprimer les chimères**
+
+Une chimère est une séquence artificielle formée quand 2 fragments d'ADN s'hybrident partiellement et sont amplifiés comme une "fausse" séquence.
+
+```{r, cache=TRUE}
+seqtab.nochim <- removeBimeraDenovo( 
+  seqtab, 
+  method="consensus", 
+  multithread=TRUE, 
+  verbose=TRUE 
+  ) 
+
+dim(seqtab.nochim)
+```
+
+
+## **Proportion de lecture "survivante" au filtrage de chimères**
+
+```{r}
+sum(seqtab.nochim)/sum(seqtab)
+```
+
+
+## **Suivre les lectures à travers la pipeline**
+
+```{r, cache=TRUE}
+getN <- function(x) sum(getUniques(x)) 
+
+track <- cbind(out, 
+               sapply(dadaFs, getN), 
+               sapply(dadaRs, getN), 
+               sapply(mergers, getN), 
+               rowSums(seqtab.nochim) 
+               )
+
+colnames(track) <- c("input", "filtered", "denoisedF", "denoisedR", "merged", "nonchim")
+rownames(track) <- sample.names
+
+head(track)
+```
+
+
+## **Attribution d'une taxonomie**
+
+Comparaison des ASVs à une base de données de références pour attribuer une taxonomie
+```{r, cache=TRUE}
+taxa <- assignTaxonomy(seqtab.nochim,  "~/Analyse_Article/Data/silva_nr99_v138.2_toGenus_trainset.fa.gz?download=1", 
+                       multithread=TRUE 
+                       )
+```
+
+## **Examination des attributions**
+
+```{r, cache=TRUE}
+taxa.print <- taxa 
+rownames(taxa.print) <- NULL 
+head(taxa.print) 
+```
+
