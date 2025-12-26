@@ -9,7 +9,8 @@ library(Rcpp)
 
 ```{r}
 path <- "~/Analyse_Article/Data"
-list.files(path)
+path_trim <- "fastq_trimmed"
+dir.create(path_trim, showWarnings = FALSE)
 ```
 
 ```{r}
@@ -18,6 +19,33 @@ fnFs = sort(
                     full.names = TRUE))
 
 fnRs <- sort(list.files(path, pattern="_2.fastq", full.names = TRUE))
+## Retrait des amorces 
+
+#Amorce 
+FWD <- "ACTCCTACGGGAGGCAGCA"
+REV <- "GGACTACHVGGGTWTCTAAT"
+
+fnFs.trim <- file.path(path_trim, basename(fnFs))
+fnRs.trim <- file.path(path_trim, basename(fnRs))
+
+cutadapt <- "cutadapt"
+
+for(i in seq_along(fnFs)) {
+  system2(cutadapt, args = c(
+    "-g", paste0("^", FWD),
+    "-G", paste0("^", REV),
+    "--discard-untrimmed",
+    "-o", fnFs.trim[i],
+    "-p", fnRs.trim[i],
+    fnFs[i], fnRs[i]
+  ))
+}
+```
+
+```{r}
+library(ShortRead)
+sread(readFastq(fnFs.trim[1]))[1:5]
+
 ```
 
 ```{r}
@@ -27,24 +55,24 @@ sample.names <- sapply(strsplit(basename(fnFs), "_"), `[`, 1)
 ## **Visualisation des profils de qualité de lecture**
 ### **Qualité de lecture Forward** ###
 ```{r}
-plotQualityProfile(fnFs[1:2])
+plotQualityProfile(fnFs.trim[1:2])
 ```
 
-On observe une bonne qualité de lecture forward jusqu'à environ 240 pb
+On observe une bonne qualité de lecture forward jusqu'à environ 220 pb
 
 ## **Qualité de lecture Reverse**
 ```{r}
-plotQualityProfile(fnRs[1:2])
+plotQualityProfile(fnRs.trim[1:2])
 ```
 
-Ici, la qualité de lecture reverse est la même que pour forward, c'est à dire 240 pb.
+Ici, la qualité de lecture reverse est la même que pour forward, c'est à dire 220 pb.
 
 ## **Filtrer et Rogner**
 
 ```{r}
-filtFs <- file.path(path,"filtered",
+filtFs <- file.path(path_trim,"filtered",
                     paste0(sample.names,"_F_filt.fastq.gz"))
-filtRs <- file.path(path, "filtered", paste0(sample.names, "_R_filt.fastq.gz"))
+filtRs <- file.path(path_trim, "filtered", paste0(sample.names, "_R_filt.fastq.gz"))
 
 names(filtFs) <- sample.names
 names(filtRs) <- sample.names
@@ -53,13 +81,11 @@ names(filtRs) <- sample.names
 ### **Filtrage et pré-traitement des séquences** ###
 
 ```{r}
-out <- filterAndTrim(fnFs, 
-                     filtFs, 
-                     fnRs, 
-                     filtRs, 
-                     truncLen=c(240,240), 
+out <- filterAndTrim(fnFs.trim, filtFs, 
+                     fnRs.trim, filtRs, 
+                     truncLen=c(220,220), 
               maxN=0, 
-              maxEE=c(2,2),
+              maxEE=c(2,5),
               truncQ=2, 
               rm.phix=TRUE, 
               compress=TRUE, 
@@ -103,7 +129,6 @@ dadaRs <- dada(filtRs, err=errR, multithread=TRUE)
 ```{r, cache=TRUE}
 dadaFs[[1]]
 ```
-
 
 ## **Fusion des lectures appariées**
 
@@ -191,5 +216,11 @@ taxa <- assignTaxonomy(seqtab.nochim,  "~/Analyse_Article/Data/silva_nr99_v138.2
 taxa.print <- taxa 
 rownames(taxa.print) <- NULL 
 head(taxa.print) 
+```
+
+## **Package PhyloSeq**
+
+```{r}
+
 ```
 
