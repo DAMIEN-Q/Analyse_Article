@@ -527,3 +527,503 @@ BiocManager::install("phyloseq")
     ##     rpart, spatial, survival
 
     ## Old packages: 'futile.logger', 'proxy'
+
+``` r
+library("phyloseq")
+```
+
+    ## 
+    ## Attaching package: 'phyloseq'
+
+    ## The following object is masked from 'package:SummarizedExperiment':
+    ## 
+    ##     distance
+
+    ## The following object is masked from 'package:Biobase':
+    ## 
+    ##     sampleNames
+
+    ## The following object is masked from 'package:GenomicRanges':
+    ## 
+    ##     distance
+
+    ## The following object is masked from 'package:IRanges':
+    ## 
+    ##     distance
+
+``` r
+packageVersion("phyloseq")
+```
+
+    ## [1] '1.44.0'
+
+``` r
+library("ggplot2")
+packageVersion("ggplot2")
+```
+
+    ## [1] '4.0.1'
+
+``` r
+library("scales")
+packageVersion("scales")
+```
+
+    ## [1] '1.4.0'
+
+``` r
+library("grid")
+```
+
+    ## 
+    ## Attaching package: 'grid'
+
+    ## The following object is masked from 'package:Biostrings':
+    ## 
+    ##     pattern
+
+``` r
+packageVersion("grid")
+```
+
+    ## [1] '4.3.1'
+
+### **Documentation intégrée à Phyloseq**
+
+``` r
+`?`("phyloseq-package")
+`?`(phyloseq)
+```
+
+### **Vignette dans le package**
+
+``` r
+vignette("phyloseq-basics")
+```
+
+    ## starting httpd help server ... done
+
+``` r
+vignette("phyloseq-analysis")
+```
+
+### **Contruction d’un objet Phyloseq à partir des données DADA2 **
+
+``` r
+theme_set(theme_bw())
+library(dplyr)
+```
+
+    ## 
+    ## Attaching package: 'dplyr'
+
+    ## The following object is masked from 'package:ShortRead':
+    ## 
+    ##     id
+
+    ## The following objects are masked from 'package:GenomicAlignments':
+    ## 
+    ##     first, last
+
+    ## The following object is masked from 'package:Biobase':
+    ## 
+    ##     combine
+
+    ## The following object is masked from 'package:matrixStats':
+    ## 
+    ##     count
+
+    ## The following objects are masked from 'package:GenomicRanges':
+    ## 
+    ##     intersect, setdiff, union
+
+    ## The following objects are masked from 'package:Biostrings':
+    ## 
+    ##     collapse, intersect, setdiff, setequal, union
+
+    ## The following object is masked from 'package:GenomeInfoDb':
+    ## 
+    ##     intersect
+
+    ## The following object is masked from 'package:XVector':
+    ## 
+    ##     slice
+
+    ## The following objects are masked from 'package:IRanges':
+    ## 
+    ##     collapse, desc, intersect, setdiff, slice, union
+
+    ## The following objects are masked from 'package:S4Vectors':
+    ## 
+    ##     first, intersect, rename, setdiff, setequal, union
+
+    ## The following objects are masked from 'package:BiocGenerics':
+    ## 
+    ##     combine, intersect, setdiff, union
+
+    ## The following objects are masked from 'package:stats':
+    ## 
+    ##     filter, lag
+
+    ## The following objects are masked from 'package:base':
+    ## 
+    ##     intersect, setdiff, setequal, union
+
+``` r
+meta <- read.csv("SraRunTable.csv", header = TRUE, sep = ",")
+
+rownames(meta) <- meta$Run
+
+meta_phy <- meta %>%
+  select(Run, Sample.Name, LibraryLayout, 
+          HOST, LibrarySelection, LibrarySource) 
+rownames(meta_phy) <- meta_phy$Run
+meta_phy$Group <- meta_phy$Sample.Name   
+
+meta_phy$Group <- NA
+
+meta_phy$Group[grepl("^A", meta_phy$Sample.Name)] <- "CON"  
+meta_phy$Group[grepl("^B", meta_phy$Sample.Name)] <- "LBC"  
+meta_phy$Group[grepl("^C", meta_phy$Sample.Name)] <- "HBC"  
+
+meta_phy$Group <- factor(meta_phy$Group, levels = c("CON", "LBC", "HBC"))
+
+SAMP <- sample_data(meta_phy)
+
+table(meta_phy$Sample.Name, meta_phy$Group)
+```
+
+    ##     
+    ##      CON LBC HBC
+    ##   A1   1   0   0
+    ##   A2   1   0   0
+    ##   A3   1   0   0
+    ##   A4   1   0   0
+    ##   A5   1   0   0
+    ##   B1   0   1   0
+    ##   B2   0   1   0
+    ##   B3   0   1   0
+    ##   B4   0   1   0
+    ##   B5   0   1   0
+    ##   C1   0   0   1
+    ##   C2   0   0   1
+    ##   C3   0   0   1
+    ##   C4   0   0   1
+    ##   C5   0   0   1
+
+``` r
+OTU <- otu_table(seqtab.nochim, taxa_are_rows = FALSE)
+TAX <- tax_table(as.matrix(taxa))
+stopifnot( all(colnames(seqtab.nochim) == rownames(TAX)) )
+stopifnot( all(rownames(SAMP) %in% rownames(seqtab.nochim)) )
+```
+
+``` r
+ps <- phyloseq(OTU,TAX,SAMP)
+ps
+```
+
+    ## phyloseq-class experiment-level object
+    ## otu_table()   OTU Table:         [ 2251 taxa and 15 samples ]
+    ## sample_data() Sample Data:       [ 15 samples by 7 sample variables ]
+    ## tax_table()   Taxonomy Table:    [ 2251 taxa by 6 taxonomic ranks ]
+
+### **Alpha Diversité**
+
+``` r
+library(ggplot2)
+
+p <- plot_richness(ps,
+                   x = "Group",
+                   measures = c("Observed", "Shannon", "Simpson", "Chao1"),
+                   color = "Group")
+```
+
+    ## Warning: `aes_string()` was deprecated in ggplot2 3.0.0.
+    ## ℹ Please use tidy evaluation idioms with `aes()`.
+    ## ℹ See also `vignette("ggplot2-in-packages")` for more information.
+    ## ℹ The deprecated feature was likely used in the phyloseq package.
+    ##   Please report the issue at <https://github.com/joey711/phyloseq/issues>.
+    ## This warning is displayed once every 8 hours.
+    ## Call `lifecycle::last_lifecycle_warnings()` to see where this warning was
+    ## generated.
+
+``` r
+p + 
+  geom_boxplot(aes(fill = Group), alpha = 0.3, outlier.shape = NA) +
+  theme_bw()
+```
+
+![](Article_report_files/figure-gfm/unnamed-chunk-32-1.png)<!-- -->
+
+### **Beta Diversité**
+
+``` r
+ord <- ordinate(ps, method = "PCoA", distance = "bray")
+plot_ordination(ps, ord, color = "Group")
+```
+
+![](Article_report_files/figure-gfm/unnamed-chunk-33-1.png)<!-- -->
+
+### **Barplots de composition**
+
+``` r
+## Phylum + abondance relative
+ps_phylum <- tax_glom(ps, taxrank = "Phylum")
+ps_phylum_rel <- transform_sample_counts(ps_phylum, function(x) x / sum(x))
+
+## Moyenne par Group × Phylum
+dfP <- psmelt(ps_phylum_rel) %>%      # Sample, Group, Phylum, Abundance
+  group_by(Group, Phylum) %>%
+  summarise(Abundance = mean(Abundance), .groups = "drop")
+
+## Sélection des 10 phyla les plus abondants (globalement)
+top_phyla <- dfP %>%
+  group_by(Phylum) %>%
+  summarise(Abundance = mean(Abundance), .groups = "drop") %>%
+  arrange(desc(Abundance)) %>%
+  slice_head(n = 10) %>%
+  pull(Phylum)
+
+dfP$Phylum_clean <- ifelse(dfP$Phylum %in% top_phyla,
+                           as.character(dfP$Phylum),
+                           "Other")
+
+## Barplot : une barre par groupe, 10 phyla + Other
+ggplot(dfP, aes(x = Group, y = Abundance, fill = Phylum_clean)) +
+  geom_bar(stat = "identity", position = "fill") +
+  ylab("Relative abundance") +
+  theme_bw()
+```
+
+![](Article_report_files/figure-gfm/unnamed-chunk-34-1.png)<!-- -->
+
+``` r
+## Agglomérer au niveau Genus + abondance relative
+ps_genus <- tax_glom(ps, taxrank = "Genus")
+ps_genus_rel <- transform_sample_counts(ps_genus, function(x) x / sum(x))  
+
+## Extraire et moyenner par Group × Genus
+dfG <- psmelt(ps_genus_rel) %>%          
+  group_by(Group, Genus) %>%
+  summarise(Abundance = mean(Abundance), .groups = "drop")
+
+## Ne garder que les genres les plus abondants
+topN <- 10
+top_genus <- dfG %>%
+  group_by(Genus) %>%
+  summarise(Abundance = mean(Abundance), .groups = "drop") %>%
+  arrange(desc(Abundance)) %>%
+  slice_head(n = topN) %>%
+  pull(Genus)
+
+dfG$Genus_clean <- ifelse(dfG$Genus %in% top_genus,
+                          as.character(dfG$Genus),
+                          "Other")
+
+## 3) Barplot : une barre par groupe
+ggplot(dfG, aes(x = Group, y = Abundance, fill = Genus_clean)) +
+  geom_bar(stat = "identity", position = "fill") +
+  ylab("Relative abundance") +
+  theme_bw()
+```
+
+![](Article_report_files/figure-gfm/unnamed-chunk-35-1.png)<!-- -->
+
+### **Arbre phylogénétique annoté**
+
+``` r
+library(Biostrings)
+library(ape)
+```
+
+    ## 
+    ## Attaching package: 'ape'
+
+    ## The following object is masked from 'package:dplyr':
+    ## 
+    ##     where
+
+    ## The following object is masked from 'package:ShortRead':
+    ## 
+    ##     zoom
+
+    ## The following object is masked from 'package:Biostrings':
+    ## 
+    ##     complement
+
+``` r
+library(phangorn)
+
+## Extraire les séquences (ligne 1)
+asv_seqs = getSequences(seqtab.nochim)
+
+## Créer les IDs d’ASV et les mettre en noms de colonnes
+asv_ids <- paste0("ASV", seq_along(asv_seqs))
+seqtab.nochim.phy = seqtab.nochim
+colnames(seqtab.nochim.phy) <- asv_ids
+
+dna_all <- DNAStringSet(asv_seqs)
+widths <- width(dna_all)
+table(widths)
+```
+
+    ## widths
+    ## 229 236 246 249 258 260 272 300 318 337 354 356 362 370 371 372 373 387 404 405 
+    ##   1   1   1   2   1   1   2   1   2   2   1   2   1   3   1   1   1   1 142 768 
+    ## 406 407 408 409 410 411 412 413 415 416 417 418 419 421 422 423 424 425 426 427 
+    ## 355 278 382  20  22   6   5   4   1   2   5   2   4   4  16  13  38 136   6   3 
+    ## 428 
+    ##  14
+
+``` r
+# Garder uniquement la longueur la plus fréquente
+main_len <- as.integer(names(sort(table(widths), decreasing = TRUE))[1])
+keep     <- which(widths == main_len)
+
+dna <- dna_all[keep]                       
+asv_ids <- paste0("ASV", seq_along(dna))
+names(dna) <- asv_ids
+
+# Filtrer la table d’abondance et la taxo de la même façon
+seqtab_filt <- seqtab.nochim[, keep, drop = FALSE]
+colnames(seqtab_filt) <- asv_ids
+
+taxa_filt <- taxa[keep, , drop = FALSE]    
+rownames(taxa_filt) <- asv_ids
+
+## Conversion en objet phangorn
+dna_phy <- as.phyDat(dna, type = "DNA")
+
+## Matrice de distances + arbre Neighbor-Joining
+dm     <- dist.ml(dna_phy)
+treeNJ <- NJ(dm)
+
+## Maximum likelihood (amélioration de l’arbre)
+fit  <- pml(treeNJ, data = dna_phy)
+fitG <- optim.pml(fit, model = "GTR", optInv = TRUE, optGamma = TRUE)
+```
+
+    ## only one rate class, ignored optGamma
+
+    ## optimize edge weights:  -57412.98 --> -56215.29 
+    ## optimize rate matrix:  -56215.29 --> -54985.03 
+    ## optimize invariant sites:  -54985.03 --> -53658.78 
+    ## optimize rate matrix:  -53645.34 --> -53631.46 
+    ## optimize invariant sites:  -53631.46 --> -53631.46 
+    ## optimize rate matrix:  -53631.46 --> -53631.46 
+    ## optimize invariant sites:  -53631.46 --> -53631.46
+
+``` r
+treeML <- fitG$tree   # arbre final
+```
+
+``` r
+OTU  <- otu_table(as.matrix(seqtab_filt), taxa_are_rows = FALSE)
+TAX  <- tax_table(as.matrix(taxa_filt))
+SAMP <- sample_data(meta_phy)
+TREE <- phy_tree(treeML)
+RS   <- refseq(dna)
+
+
+ps <- phyloseq(OTU, TAX, SAMP, TREE, RS)
+
+ps.Faecalibacterium <- subset_taxa(ps, Genus == "Faecalibacterium")
+
+plot_tree(ps.Faecalibacterium, color = "Group", label.tips = "Genus", size = "abundance", plot.margin = 0.5, ladderize = TRUE)
+```
+
+![](Article_report_files/figure-gfm/unnamed-chunk-37-1.png)<!-- -->
+
+### **Raréfaction **
+
+``` r
+ps.rare <- rarefy_even_depth(ps)
+```
+
+    ## You set `rngseed` to FALSE. Make sure you've set & recorded
+    ##  the random seed of your session for reproducibility.
+    ## See `?set.seed`
+
+    ## ...
+
+    ## 75OTUs were removed because they are no longer 
+    ## present in any sample after random subsampling
+
+    ## ...
+
+``` r
+## Sans Raréfaction
+
+ord_unrare <- ordinate(ps, method = "PCoA", distance = "unifrac")
+```
+
+    ## Warning in UniFrac(physeq, ...): Randomly assigning root as -- ASV439 -- in the
+    ## phylogenetic tree in the data you provided.
+
+``` r
+plot_ordination(ps, ord_unrare, color = "Group") +
+  geom_point(size = 4)
+```
+
+![](Article_report_files/figure-gfm/unnamed-chunk-39-1.png)<!-- -->
+
+``` r
+## Avec Raréfaction
+
+ord_rare <- ordinate(ps.rare, method = "PCoA", distance = "unifrac")
+```
+
+    ## Warning in UniFrac(physeq, ...): Randomly assigning root as -- ASV645 -- in the
+    ## phylogenetic tree in the data you provided.
+
+``` r
+plot_ordination(ps.rare, ord_rare, color = "Group") +
+  geom_point(size = 4)
+```
+
+![](Article_report_files/figure-gfm/unnamed-chunk-40-1.png)<!-- -->
+
+### **La fonction plot network **
+
+``` r
+ps_20 <- prune_taxa(taxa_sums(ps) > 20, ps)
+jg <- make_network(ps_20, type = "taxa", dist.fun = "bray",
+                   max.dist = 0.7)
+plot_network(jg, ps_20, "taxa", color = "Phylum")
+```
+
+    ## Warning: `aes_string()` was deprecated in ggplot2 3.0.0.
+    ## ℹ Please use tidy evaluation idioms with `aes()`.
+    ## ℹ See also `vignette("ggplot2-in-packages")` for more information.
+    ## ℹ The deprecated feature was likely used in the phyloseq package.
+    ##   Please report the issue at <https://github.com/joey711/phyloseq/issues>.
+    ## This warning is displayed once every 8 hours.
+    ## Call `lifecycle::last_lifecycle_warnings()` to see where this warning was
+    ## generated.
+
+    ## Warning: Using `size` aesthetic for lines was deprecated in ggplot2 3.4.0.
+    ## ℹ Please use `linewidth` instead.
+    ## ℹ The deprecated feature was likely used in the phyloseq package.
+    ##   Please report the issue at <https://github.com/joey711/phyloseq/issues>.
+    ## This warning is displayed once every 8 hours.
+    ## Call `lifecycle::last_lifecycle_warnings()` to see where this warning was
+    ## generated.
+
+![](Article_report_files/figure-gfm/unnamed-chunk-41-1.png)<!-- -->
+
+### **La fonction plot heatmap **
+
+``` r
+# Heatmap ordonnée (NMDS + Bray-Curtis), étiquettes = Group et Phylum
+ps_top <- prune_taxa(names(sort(taxa_sums(ps), decreasing = TRUE))[1:200], ps)
+
+plot_heatmap(ps_top,
+             "NMDS", "bray", "Group", "Genus",
+             trans = log_trans(10))
+```
+
+    ## Warning in scale_fill_gradient(low = low, high = high, trans = trans, na.value
+    ## = na.value): log-10 transformation introduced infinite values.
+
+![](Article_report_files/figure-gfm/unnamed-chunk-42-1.png)<!-- -->

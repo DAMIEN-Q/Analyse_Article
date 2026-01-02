@@ -98,21 +98,21 @@ Le tableau montre clairement le nombre lectures avant filtrage (reads.in) et apr
 
 ## **Taux d'erreur de séquençage**
 
-```{r}
+```{r,cache=TRUE}
 errF <- learnErrors(filtFs, multithread=TRUE)
 ```
-```{r}
+```{r,cache=TRUE}
 errR <- learnErrors(filtRs, multithread=TRUE)
 ```
 ## **Visualisation des taux d'erreur** 
 
-```{r,cache=FALSE}
+```{r,cache=TRUE}
 plotErrors(errF, nominalQ=TRUE)
 ```
 
 ## **Application de l'algo de DADA2**
 
-```{r, cache=TRUE}
+```{r,cache=TRUE}
 dadaFs <- dada(filtFs,
                err=errF, 
                multithread=TRUE 
@@ -120,19 +120,19 @@ dadaFs <- dada(filtFs,
 ```
 
 
-```{r, cache=TRUE}
+```{r,cache=TRUE}
 dadaRs <- dada(filtRs, err=errR, multithread=TRUE)
 ```
 
 ## **Inspection**
 
-```{r, cache=TRUE}
+```{r,cache=TRUE}
 dadaFs[[1]]
 ```
 
 ## **Fusion des lectures appariées**
 
-```{r, cache=TRUE}
+```{r,cache=TRUE}
 mergers <- mergePairs(dadaFs, 
                       filtFs, 
                       dadaRs, 
@@ -144,14 +144,14 @@ head(mergers[[1]])
 
 ## **Construction d'une table de séquence**
 
-```{r, cache=TRUE}
+```{r,cache=TRUE}
 seqtab <- makeSequenceTable(mergers) 
 dim(seqtab)
 ```
 
 ### **Inspection de la distribution des longueurs des séquences** ###
   
-```{r, cache=TRUE}
+```{r,cache=TRUE}
 table( 
   nchar( 
     getSequences(seqtab) 
@@ -163,7 +163,7 @@ table(
 
 Une chimère est une séquence artificielle formée quand 2 fragments d'ADN s'hybrident partiellement et sont amplifiés comme une "fausse" séquence.
 
-```{r, cache=TRUE}
+```{r,cache=TRUE}
 seqtab.nochim <- removeBimeraDenovo( 
   seqtab, 
   method="consensus", 
@@ -177,14 +177,14 @@ dim(seqtab.nochim)
 
 ## **Proportion de lecture "survivante" au filtrage de chimères**
 
-```{r}
+```{r,cache=TRUE}
 sum(seqtab.nochim)/sum(seqtab)
 ```
 
 
 ## **Suivre les lectures à travers la pipeline**
 
-```{r, cache=TRUE}
+```{r,cache=TRUE}
 getN <- function(x) sum(getUniques(x)) 
 
 track <- cbind(out, 
@@ -204,7 +204,7 @@ head(track)
 ## **Attribution d'une taxonomie**
 
 Comparaison des ASVs à une base de données de références pour attribuer une taxonomie
-```{r, cache=TRUE}
+```{r,cache=TRUE}
 taxa <- assignTaxonomy(seqtab.nochim,  "~/Analyse_Article/Data/silva_nr99_v138.2_toGenus_trainset.fa.gz?download=1", 
                        multithread=TRUE 
                        )
@@ -212,7 +212,7 @@ taxa <- assignTaxonomy(seqtab.nochim,  "~/Analyse_Article/Data/silva_nr99_v138.2
 
 ## **Examination des attributions**
 
-```{r, cache=TRUE}
+```{r,cache=TRUE}
 taxa.print <- taxa 
 rownames(taxa.print) <- NULL 
 head(taxa.print) 
@@ -220,10 +220,263 @@ head(taxa.print)
 
 ## **Package PhyloSeq**
 
-```{r}
+```{r,echo= TRUE}
 if(!requireNamespace("BiocManager")){
   install.packages("BiocManager")
 }
 BiocManager::install("phyloseq")
+```
+
+```{r,echo = TRUE}
+library("phyloseq")
+packageVersion("phyloseq")
+
+library("ggplot2")
+packageVersion("ggplot2")
+
+library("scales")
+packageVersion("scales")
+
+library("grid")
+packageVersion("grid")
+```
+
+### **Documentation intégrée à Phyloseq** ###
+```{r,cache=TRUE}
+`?`("phyloseq-package")
+`?`(phyloseq)
+```
+
+### **Vignette dans le package** ###
+```{r,cache=TRUE}
+vignette("phyloseq-basics")
+vignette("phyloseq-analysis")
+```
+
+### **Contruction d'un objet Phyloseq à partir des données DADA2 ** ###
+```{r,cache=TRUE}
+theme_set(theme_bw())
+library(dplyr)
+```
+
+```{r,cache=TRUE}
+meta <- read.csv("SraRunTable.csv", header = TRUE, sep = ",")
+
+rownames(meta) <- meta$Run
+
+meta_phy <- meta %>%
+  select(Run, Sample.Name, LibraryLayout, 
+          HOST, LibrarySelection, LibrarySource) 
+rownames(meta_phy) <- meta_phy$Run
+meta_phy$Group <- meta_phy$Sample.Name   
+
+meta_phy$Group <- NA
+
+meta_phy$Group[grepl("^A", meta_phy$Sample.Name)] <- "CON"  
+meta_phy$Group[grepl("^B", meta_phy$Sample.Name)] <- "LBC"  
+meta_phy$Group[grepl("^C", meta_phy$Sample.Name)] <- "HBC"  
+
+meta_phy$Group <- factor(meta_phy$Group, levels = c("CON", "LBC", "HBC"))
+
+SAMP <- sample_data(meta_phy)
+
+table(meta_phy$Sample.Name, meta_phy$Group)
+
+```
+```{r,cache=TRUE}
+OTU <- otu_table(seqtab.nochim, taxa_are_rows = FALSE)
+TAX <- tax_table(as.matrix(taxa))
+stopifnot( all(colnames(seqtab.nochim) == rownames(TAX)) )
+stopifnot( all(rownames(SAMP) %in% rownames(seqtab.nochim)) )
+```
+
+```{r,cache=TRUE}
+ps <- phyloseq(OTU,TAX,SAMP)
+ps
+```
+### **Alpha Diversité** ###
+```{r,cache=TRUE}
+library(ggplot2)
+
+p <- plot_richness(ps,
+                   x = "Group",
+                   measures = c("Observed", "Shannon", "Simpson", "Chao1"),
+                   color = "Group")
+
+p + 
+  geom_boxplot(aes(fill = Group), alpha = 0.3, outlier.shape = NA) +
+  theme_bw()
+
+```
+
+### **Beta Diversité** ###
+```{r,cache=TRUE}
+ord <- ordinate(ps, method = "PCoA", distance = "bray")
+plot_ordination(ps, ord, color = "Group")
+```
+
+### **Barplots de composition** ###
+```{r,cache=TRUE}
+## Phylum + abondance relative
+ps_phylum <- tax_glom(ps, taxrank = "Phylum")
+ps_phylum_rel <- transform_sample_counts(ps_phylum, function(x) x / sum(x))
+
+## Moyenne par Group × Phylum
+dfP <- psmelt(ps_phylum_rel) %>%      # Sample, Group, Phylum, Abundance
+  group_by(Group, Phylum) %>%
+  summarise(Abundance = mean(Abundance), .groups = "drop")
+
+## Sélection des 10 phyla les plus abondants (globalement)
+top_phyla <- dfP %>%
+  group_by(Phylum) %>%
+  summarise(Abundance = mean(Abundance), .groups = "drop") %>%
+  arrange(desc(Abundance)) %>%
+  slice_head(n = 10) %>%
+  pull(Phylum)
+
+dfP$Phylum_clean <- ifelse(dfP$Phylum %in% top_phyla,
+                           as.character(dfP$Phylum),
+                           "Other")
+
+## Barplot : une barre par groupe, 10 phyla + Other
+ggplot(dfP, aes(x = Group, y = Abundance, fill = Phylum_clean)) +
+  geom_bar(stat = "identity", position = "fill") +
+  ylab("Relative abundance") +
+  theme_bw()
+
+```
+
+```{r,cache=TRUE}
+## Agglomérer au niveau Genus + abondance relative
+ps_genus <- tax_glom(ps, taxrank = "Genus")
+ps_genus_rel <- transform_sample_counts(ps_genus, function(x) x / sum(x))  
+
+## Extraire et moyenner par Group × Genus
+dfG <- psmelt(ps_genus_rel) %>%          
+  group_by(Group, Genus) %>%
+  summarise(Abundance = mean(Abundance), .groups = "drop")
+
+## Ne garder que les genres les plus abondants
+topN <- 10
+top_genus <- dfG %>%
+  group_by(Genus) %>%
+  summarise(Abundance = mean(Abundance), .groups = "drop") %>%
+  arrange(desc(Abundance)) %>%
+  slice_head(n = topN) %>%
+  pull(Genus)
+
+dfG$Genus_clean <- ifelse(dfG$Genus %in% top_genus,
+                          as.character(dfG$Genus),
+                          "Other")
+
+## 3) Barplot : une barre par groupe
+ggplot(dfG, aes(x = Group, y = Abundance, fill = Genus_clean)) +
+  geom_bar(stat = "identity", position = "fill") +
+  ylab("Relative abundance") +
+  theme_bw()
+```
+
+### **Arbre phylogénétique annoté** ###
+```{r,cache=TRUE}
+library(Biostrings)
+library(ape)
+library(phangorn)
+
+## Extraire les séquences (ligne 1)
+asv_seqs = getSequences(seqtab.nochim)
+
+## Créer les IDs d’ASV et les mettre en noms de colonnes
+asv_ids <- paste0("ASV", seq_along(asv_seqs))
+seqtab.nochim.phy = seqtab.nochim
+colnames(seqtab.nochim.phy) <- asv_ids
+
+dna_all <- DNAStringSet(asv_seqs)
+widths <- width(dna_all)
+table(widths)
+
+# Garder uniquement la longueur la plus fréquente
+main_len <- as.integer(names(sort(table(widths), decreasing = TRUE))[1])
+keep     <- which(widths == main_len)
+
+dna <- dna_all[keep]                       
+asv_ids <- paste0("ASV", seq_along(dna))
+names(dna) <- asv_ids
+
+# Filtrer la table d’abondance et la taxo de la même façon
+seqtab_filt <- seqtab.nochim[, keep, drop = FALSE]
+colnames(seqtab_filt) <- asv_ids
+
+taxa_filt <- taxa[keep, , drop = FALSE]    
+rownames(taxa_filt) <- asv_ids
+
+## Conversion en objet phangorn
+dna_phy <- as.phyDat(dna, type = "DNA")
+
+## Matrice de distances + arbre Neighbor-Joining
+dm     <- dist.ml(dna_phy)
+treeNJ <- NJ(dm)
+
+## Maximum likelihood (amélioration de l’arbre)
+fit  <- pml(treeNJ, data = dna_phy)
+fitG <- optim.pml(fit, model = "GTR", optInv = TRUE, optGamma = TRUE)
+
+treeML <- fitG$tree   # arbre final
+```
+
+```{r,cache=TRUE}
+OTU  <- otu_table(as.matrix(seqtab_filt), taxa_are_rows = FALSE)
+TAX  <- tax_table(as.matrix(taxa_filt))
+SAMP <- sample_data(meta_phy)
+TREE <- phy_tree(treeML)
+RS   <- refseq(dna)
+
+
+ps <- phyloseq(OTU, TAX, SAMP, TREE, RS)
+
+ps.Faecalibacterium <- subset_taxa(ps, Genus == "Faecalibacterium")
+
+plot_tree(ps.Faecalibacterium, color = "Group", label.tips = "Genus", size = "abundance", plot.margin = 0.5, ladderize = TRUE)
+
+```
+
+### **Raréfaction ** ###
+```{r,cache=TRUE}
+ps.rare <- rarefy_even_depth(ps)
+```
+```{r,cache=TRUE}
+## Sans Raréfaction
+
+ord_unrare <- ordinate(ps, method = "PCoA", distance = "unifrac")
+plot_ordination(ps, ord_unrare, color = "Group") +
+  geom_point(size = 4)
+
+```
+
+```{r,cache=TRUE}
+## Avec Raréfaction
+
+ord_rare <- ordinate(ps.rare, method = "PCoA", distance = "unifrac")
+plot_ordination(ps.rare, ord_rare, color = "Group") +
+  geom_point(size = 4)
+
+```
+
+### **La fonction plot network ** ###
+```{r,cache=TRUE}
+ps_20 <- prune_taxa(taxa_sums(ps) > 20, ps)
+jg <- make_network(ps_20, type = "taxa", dist.fun = "bray",
+                   max.dist = 0.7)
+plot_network(jg, ps_20, "taxa", color = "Phylum")
+
+```
+
+### **La fonction plot heatmap ** ###
+```{r,cache=TRUE}
+# Heatmap ordonnée (NMDS + Bray-Curtis), étiquettes = Group et Phylum
+ps_top <- prune_taxa(names(sort(taxa_sums(ps), decreasing = TRUE))[1:200], ps)
+
+plot_heatmap(ps_top,
+             "NMDS", "bray", "Group", "Genus",
+             trans = log_trans(10))
 ```
 
