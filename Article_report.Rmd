@@ -221,6 +221,9 @@ head(taxa.print)
 ## **Package PhyloSeq**
 
 ```{r}
-
+if(!requireNamespace("BiocManager")){
+  install.packages("BiocManager")
+}
+BiocManager::install("phyloseq")
 ```
 

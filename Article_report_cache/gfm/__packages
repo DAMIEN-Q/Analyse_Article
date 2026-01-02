@@ -1,0 +1,17 @@
+Rcpp
+dada2
+BiocGenerics
+BiocParallel
+S4Vectors
+IRanges
+XVector
+GenomeInfoDb
+Biostrings
+GenomicRanges
+Rsamtools
+matrixStats
+MatrixGenerics
+Biobase
+SummarizedExperiment
+GenomicAlignments
+ShortRead
