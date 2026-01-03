@@ -164,6 +164,9 @@ sread(readFastq(fnFs.trim[1]))[1:5]
     ## [4]   222 GTGGGGAATATTGCACAATGGGGGAAACCCTGAT...TAAAGGGAGCGCAGGCGGGTAGACAAGTTGGGA
     ## [5]   222 GTGGGGAATATTGGGCAATGGGGGAAACCCTGAC...TAAAGGGCGCGTAGGCGGCCTGGTAAGTTTGAA
 
+Ici, j’ai été obligé de supprimer les amorces car trop de séquence
+considérer comme des chimères par la suite.
+
 ``` r
 sample.names <- sapply(strsplit(basename(fnFs), "_"), `[`, 1)
 ```
@@ -799,16 +802,16 @@ ggplot(dfP, aes(x = Group, y = Abundance, fill = Phylum_clean)) +
 ![](Article_report_files/figure-gfm/unnamed-chunk-34-1.png)<!-- -->
 
 ``` r
-## Agglomérer au niveau Genus + abondance relative
+## Agglomérer au niveau Genre + abondance relative
 ps_genus <- tax_glom(ps, taxrank = "Genus")
 ps_genus_rel <- transform_sample_counts(ps_genus, function(x) x / sum(x))  
 
-## Extraire et moyenner par Group × Genus
+## Extraire et moyenner par Groupe × Genre
 dfG <- psmelt(ps_genus_rel) %>%          
   group_by(Group, Genus) %>%
   summarise(Abundance = mean(Abundance), .groups = "drop")
 
-## Ne garder que les genres les plus abondants
+## Garde que les genres les plus abondants
 topN <- 10
 top_genus <- dfG %>%
   group_by(Genus) %>%
@@ -821,7 +824,7 @@ dfG$Genus_clean <- ifelse(dfG$Genus %in% top_genus,
                           as.character(dfG$Genus),
                           "Other")
 
-## 3) Barplot : une barre par groupe
+## Barplot 
 ggplot(dfG, aes(x = Group, y = Abundance, fill = Genus_clean)) +
   geom_bar(stat = "identity", position = "fill") +
   ylab("Relative abundance") +
@@ -835,27 +838,9 @@ ggplot(dfG, aes(x = Group, y = Abundance, fill = Genus_clean)) +
 ``` r
 library(Biostrings)
 library(ape)
-```
-
-    ## 
-    ## Attaching package: 'ape'
-
-    ## The following object is masked from 'package:dplyr':
-    ## 
-    ##     where
-
-    ## The following object is masked from 'package:ShortRead':
-    ## 
-    ##     zoom
-
-    ## The following object is masked from 'package:Biostrings':
-    ## 
-    ##     complement
-
-``` r
 library(phangorn)
 
-## Extraire les séquences (ligne 1)
+## Extraire les séquences 
 asv_seqs = getSequences(seqtab.nochim)
 
 ## Créer les IDs d’ASV et les mettre en noms de colonnes
@@ -885,7 +870,7 @@ dna <- dna_all[keep]
 asv_ids <- paste0("ASV", seq_along(dna))
 names(dna) <- asv_ids
 
-# Filtrer la table d’abondance et la taxo de la même façon
+# Filtrer la table d’abondance et la taxo 
 seqtab_filt <- seqtab.nochim[, keep, drop = FALSE]
 colnames(seqtab_filt) <- asv_ids
 
@@ -930,8 +915,17 @@ ps <- phyloseq(OTU, TAX, SAMP, TREE, RS)
 
 ps.Faecalibacterium <- subset_taxa(ps, Genus == "Faecalibacterium")
 
-plot_tree(ps.Faecalibacterium, color = "Group", label.tips = "Genus", size = "abundance", plot.margin = 0.5, ladderize = TRUE)
+plot_tree(ps.Faecalibacterium, color = "Group", label.tips = "Genus", size = "abundance")
 ```
+
+    ## Warning: `aes_string()` was deprecated in ggplot2 3.0.0.
+    ## ℹ Please use tidy evaluation idioms with `aes()`.
+    ## ℹ See also `vignette("ggplot2-in-packages")` for more information.
+    ## ℹ The deprecated feature was likely used in the phyloseq package.
+    ##   Please report the issue at <https://github.com/joey711/phyloseq/issues>.
+    ## This warning is displayed once every 8 hours.
+    ## Call `lifecycle::last_lifecycle_warnings()` to see where this warning was
+    ## generated.
 
 ![](Article_report_files/figure-gfm/unnamed-chunk-37-1.png)<!-- -->
 
@@ -982,7 +976,9 @@ plot_ordination(ps.rare, ord_rare, color = "Group") +
   geom_point(size = 4)
 ```
 
-![](Article_report_files/figure-gfm/unnamed-chunk-40-1.png)<!-- -->
+![](Article_report_files/figure-gfm/unnamed-chunk-40-1.png)<!-- --> On
+observe bien qu’avec et sans raréfaction, on voit que les groupe HBC et
+LBC sont très proche
 
 ### **La fonction plot network **
 
@@ -1010,20 +1006,149 @@ plot_network(jg, ps_20, "taxa", color = "Phylum")
     ## Call `lifecycle::last_lifecycle_warnings()` to see where this warning was
     ## generated.
 
-![](Article_report_files/figure-gfm/unnamed-chunk-41-1.png)<!-- -->
+![](Article_report_files/figure-gfm/unnamed-chunk-41-1.png)<!-- --> On
+voit ici que le phylum “Bacillota” est majoritairement présent dans les
+différents groupes
 
-### **La fonction plot heatmap **
+### **La heatmap **
 
 ``` r
-# Heatmap ordonnée (NMDS + Bray-Curtis), étiquettes = Group et Phylum
-ps_top <- prune_taxa(names(sort(taxa_sums(ps), decreasing = TRUE))[1:200], ps)
+# Garder les 50 taxa les plus abondants
+ps_top <- prune_taxa(names(sort(taxa_sums(ps), decreasing = TRUE))[1:50], ps)
 
-plot_heatmap(ps_top,
-             "NMDS", "bray", "Group", "Genus",
-             trans = log_trans(10))
+# Passer en abondances relatives
+ps_rel <- transform_sample_counts(ps_top, function(x) x / sum(x))
+
+# Extraire au format long
+df <- psmelt(ps_rel)  # colonnes : Sample, Group, Genus, Abundance, etc.
+
+# Moyenne d'abondance par Group × Genus
+df_mean <- df %>%
+  group_by(Group, Genus) %>%
+  summarise(Abundance = mean(Abundance), .groups = "drop")
+
+ggplot(df_mean, aes(x = Group, y = Genus, fill = Abundance)) +
+  geom_tile() +
+  scale_fill_gradient(low = "navy", high = "yellow") +
+  xlab("Group") +
+  ylab("Genus (mean relative abundance)") +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
 ```
 
-    ## Warning in scale_fill_gradient(low = low, high = high, trans = trans, na.value
-    ## = na.value): log-10 transformation introduced infinite values.
-
 ![](Article_report_files/figure-gfm/unnamed-chunk-42-1.png)<!-- -->
+
+“Enterocloster” a une abondance relative bien supérieur au autres dans
+les groupe CON et HBC
+
+### **Statistique d’écart **
+
+``` r
+library(cluster)
+library(vegan)
+```
+
+    ## Loading required package: permute
+
+    ## 
+    ## Attaching package: 'vegan'
+
+    ## The following objects are masked from 'package:phangorn':
+    ## 
+    ##     diversity, treedist
+
+``` r
+ord <- ordinate(ps, method = "PCoA", distance = "bray")
+x <- ord$vectors
+x2 <- x[, 1:2]
+
+pam1 <- function(x, k) list(cluster = pam(x, k, cluster.only = TRUE))
+
+set.seed(123)  
+gs <- clusGap(x2,
+              FUN   = pam1,
+              K.max = 6,   
+              B     = 50)  
+print(gs, method = "Tibs2001SEmax")
+```
+
+    ## Clustering Gap statistic ["clusGap"] from call:
+    ## clusGap(x = x2, FUNcluster = pam1, K.max = 6, B = 50)
+    ## B=50 simulated reference sets, k = 1..6; spaceH0="scaledPCA"
+    ##  --> Number of clusters (method 'Tibs2001SEmax', SE.factor=1): 1
+    ##             logW     E.logW         gap     SE.sim
+    ## [1,]  0.21845859  0.1749525 -0.04350613 0.09446934
+    ## [2,] -0.06945245 -0.2208889 -0.15143643 0.10591954
+    ## [3,] -0.52312533 -0.5774425 -0.05431714 0.09749973
+    ## [4,] -0.89138850 -0.8491469  0.04224164 0.12518386
+    ## [5,] -1.16253692 -1.1143641  0.04817282 0.13637115
+    ## [6,] -1.48396723 -1.3490658  0.13490139 0.16115896
+
+Ici, le nombre de cluster recommandé est 1
+
+``` r
+## Fonction "wrapper"
+gap_statistic_ordination <- function(physeq,
+                                     method = "PCoA",
+                                     distance = "bray",
+                                     FUNcluster = "pam1",
+                                     K.max = 6,
+                                     axes = 1:2,
+                                     B = 50,
+                                     verbose = FALSE) {
+  ord_phy <- ordinate(physeq, method = method, distance = distance)
+  x_2   <- ord_phy$vectors
+
+  if (is.null(axes)) axes <- 1:ncol(x_2)
+  x_3   <- x_2[, axes, drop = FALSE]
+
+  if (FUNcluster == "pam1") {
+    FUNcluster <- function(x_3, k) list(cluster = pam(x_3, k, cluster.only = TRUE))
+  }
+
+  clusGap(x_3, FUN = FUNcluster, K.max = K.max, B = B, verbose = verbose)
+}
+```
+
+``` r
+plot_clusgap <- function(clusgap, title = "Gap statistic (clusters)") {
+  library(ggplot2)
+  gstab <- data.frame(clusgap$Tab, k = 1:nrow(clusgap$Tab))
+  ggplot(gstab, aes(k, gap)) +
+    geom_line() +
+    geom_point(size = 4) +
+    geom_errorbar(aes(ymin = gap - SE.sim, ymax = gap + SE.sim), width = 0.1) +
+    ggtitle(title) +
+    theme_bw()
+}
+```
+
+``` r
+gap <- gap_statistic_ordination(ps,
+                               method   = "PCoA",
+                               distance = "bray",
+                               K.max    = 6,
+                               B        = 50)
+print(gap, method = "Tibs2001SEmax")  
+```
+
+    ## Clustering Gap statistic ["clusGap"] from call:
+    ## clusGap(x = x_3, FUNcluster = FUNcluster, K.max = K.max, B = B, verbose = verbose)
+    ## B=50 simulated reference sets, k = 1..6; spaceH0="scaledPCA"
+    ##  --> Number of clusters (method 'Tibs2001SEmax', SE.factor=1): 1
+    ##             logW     E.logW         gap    SE.sim
+    ## [1,]  0.21845859  0.1934631 -0.02499551 0.1025612
+    ## [2,] -0.06945245 -0.2058074 -0.13635499 0.1221872
+    ## [3,] -0.52312533 -0.5721363 -0.04901100 0.1259239
+    ## [4,] -0.89138850 -0.8526790  0.03870950 0.1292941
+    ## [5,] -1.16253692 -1.1090601  0.05347682 0.1433906
+    ## [6,] -1.48396723 -1.3426463  0.14132091 0.1628891
+
+``` r
+plot_clusgap(gs)
+```
+
+![](Article_report_files/figure-gfm/unnamed-chunk-46-1.png)<!-- --> On
+observe ici que les “gaps” sont proche de 0 ou négative ce qui signifie
+que le clustering est soit similaire à un nuage aléatoire, soit qu’il
+n’est pas plus compact.

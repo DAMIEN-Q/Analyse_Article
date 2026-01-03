@@ -47,6 +47,8 @@ library(ShortRead)
 sread(readFastq(fnFs.trim[1]))[1:5]
 
 ```
+Ici, j'ai été obligé de supprimer les amorces car trop de séquence considérer comme des chimères par la suite.
+
 
 ```{r}
 sample.names <- sapply(strsplit(basename(fnFs), "_"), `[`, 1)
@@ -347,16 +349,16 @@ ggplot(dfP, aes(x = Group, y = Abundance, fill = Phylum_clean)) +
 ```
 
 ```{r,cache=TRUE}
-## Agglomérer au niveau Genus + abondance relative
+## Agglomérer au niveau Genre + abondance relative
 ps_genus <- tax_glom(ps, taxrank = "Genus")
 ps_genus_rel <- transform_sample_counts(ps_genus, function(x) x / sum(x))  
 
-## Extraire et moyenner par Group × Genus
+## Extraire et moyenner par Groupe × Genre
 dfG <- psmelt(ps_genus_rel) %>%          
   group_by(Group, Genus) %>%
   summarise(Abundance = mean(Abundance), .groups = "drop")
 
-## Ne garder que les genres les plus abondants
+## Garde que les genres les plus abondants
 topN <- 10
 top_genus <- dfG %>%
   group_by(Genus) %>%
@@ -369,7 +371,7 @@ dfG$Genus_clean <- ifelse(dfG$Genus %in% top_genus,
                           as.character(dfG$Genus),
                           "Other")
 
-## 3) Barplot : une barre par groupe
+## Barplot 
 ggplot(dfG, aes(x = Group, y = Abundance, fill = Genus_clean)) +
   geom_bar(stat = "identity", position = "fill") +
   ylab("Relative abundance") +
@@ -382,7 +384,7 @@ library(Biostrings)
 library(ape)
 library(phangorn)
 
-## Extraire les séquences (ligne 1)
+## Extraire les séquences 
 asv_seqs = getSequences(seqtab.nochim)
 
 ## Créer les IDs d’ASV et les mettre en noms de colonnes
@@ -402,7 +404,7 @@ dna <- dna_all[keep]
 asv_ids <- paste0("ASV", seq_along(dna))
 names(dna) <- asv_ids
 
-# Filtrer la table d’abondance et la taxo de la même façon
+# Filtrer la table d’abondance et la taxo 
 seqtab_filt <- seqtab.nochim[, keep, drop = FALSE]
 colnames(seqtab_filt) <- asv_ids
 
@@ -435,7 +437,7 @@ ps <- phyloseq(OTU, TAX, SAMP, TREE, RS)
 
 ps.Faecalibacterium <- subset_taxa(ps, Genus == "Faecalibacterium")
 
-plot_tree(ps.Faecalibacterium, color = "Group", label.tips = "Genus", size = "abundance", plot.margin = 0.5, ladderize = TRUE)
+plot_tree(ps.Faecalibacterium, color = "Group", label.tips = "Genus", size = "abundance")
 
 ```
 
@@ -460,6 +462,8 @@ plot_ordination(ps.rare, ord_rare, color = "Group") +
   geom_point(size = 4)
 
 ```
+On observe bien qu'avec et sans raréfaction, on voit que les groupe HBC et LBC sont très proche
+
 
 ### **La fonction plot network ** ###
 ```{r,cache=TRUE}
@@ -469,14 +473,104 @@ jg <- make_network(ps_20, type = "taxa", dist.fun = "bray",
 plot_network(jg, ps_20, "taxa", color = "Phylum")
 
 ```
+On voit ici que le phylum "Bacillota" est majoritairement présent dans les différents groupes
 
-### **La fonction plot heatmap ** ###
+
+### **La heatmap ** ###
 ```{r,cache=TRUE}
-# Heatmap ordonnée (NMDS + Bray-Curtis), étiquettes = Group et Phylum
-ps_top <- prune_taxa(names(sort(taxa_sums(ps), decreasing = TRUE))[1:200], ps)
+# Garder les 50 taxa les plus abondants
+ps_top <- prune_taxa(names(sort(taxa_sums(ps), decreasing = TRUE))[1:50], ps)
 
-plot_heatmap(ps_top,
-             "NMDS", "bray", "Group", "Genus",
-             trans = log_trans(10))
+# Passer en abondances relatives
+ps_rel <- transform_sample_counts(ps_top, function(x) x / sum(x))
+
+# Extraire au format long
+df <- psmelt(ps_rel)  # colonnes : Sample, Group, Genus, Abundance, etc.
+
+# Moyenne d'abondance par Group × Genus
+df_mean <- df %>%
+  group_by(Group, Genus) %>%
+  summarise(Abundance = mean(Abundance), .groups = "drop")
+
+ggplot(df_mean, aes(x = Group, y = Genus, fill = Abundance)) +
+  geom_tile() +
+  scale_fill_gradient(low = "navy", high = "yellow") +
+  xlab("Group") +
+  ylab("Genus (mean relative abundance)") +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
 ```
 
+"Enterocloster" a une abondance relative bien supérieur au autres dans les groupe CON et HBC
+
+
+### **Statistique d'écart ** ###
+```{r, cache=TRUE}
+library(cluster)
+library(vegan)
+
+ord <- ordinate(ps, method = "PCoA", distance = "bray")
+x <- ord$vectors
+x2 <- x[, 1:2]
+
+pam1 <- function(x, k) list(cluster = pam(x, k, cluster.only = TRUE))
+
+set.seed(123)  
+gs <- clusGap(x2,
+              FUN   = pam1,
+              K.max = 6,   
+              B     = 50)  
+print(gs, method = "Tibs2001SEmax")
+
+```
+Ici, le nombre de cluster recommandé est 1
+
+```{r, cache=TRUE}
+## Fonction "wrapper"
+gap_statistic_ordination <- function(physeq,
+                                     method = "PCoA",
+                                     distance = "bray",
+                                     FUNcluster = "pam1",
+                                     K.max = 6,
+                                     axes = 1:2,
+                                     B = 50,
+                                     verbose = FALSE) {
+  ord_phy <- ordinate(physeq, method = method, distance = distance)
+  x_2   <- ord_phy$vectors
+
+  if (is.null(axes)) axes <- 1:ncol(x_2)
+  x_3   <- x_2[, axes, drop = FALSE]
+
+  if (FUNcluster == "pam1") {
+    FUNcluster <- function(x_3, k) list(cluster = pam(x_3, k, cluster.only = TRUE))
+  }
+
+  clusGap(x_3, FUN = FUNcluster, K.max = K.max, B = B, verbose = verbose)
+}
+```
+
+```{r, cache=TRUE}
+plot_clusgap <- function(clusgap, title = "Gap statistic (clusters)") {
+  library(ggplot2)
+  gstab <- data.frame(clusgap$Tab, k = 1:nrow(clusgap$Tab))
+  ggplot(gstab, aes(k, gap)) +
+    geom_line() +
+    geom_point(size = 4) +
+    geom_errorbar(aes(ymin = gap - SE.sim, ymax = gap + SE.sim), width = 0.1) +
+    ggtitle(title) +
+    theme_bw()
+}
+```
+
+```{r, cache=TRUE}
+gap <- gap_statistic_ordination(ps,
+                               method   = "PCoA",
+                               distance = "bray",
+                               K.max    = 6,
+                               B        = 50)
+print(gap, method = "Tibs2001SEmax")  
+plot_clusgap(gs)
+
+```
+On observe ici que les "gaps" sont proche de 0 ou négative ce qui signifie que le clustering est soit similaire à un nuage aléatoire, soit qu'il n'est pas plus compact.
