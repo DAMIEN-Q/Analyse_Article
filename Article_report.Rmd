@@ -220,6 +220,9 @@ rownames(taxa.print) <- NULL
 head(taxa.print) 
 ```
 
+Ici, on retrouve bien comme dans l'article le phylum majoritaire Bacillota (anciennement Firmicutes). Néanmoins, les auteurs ont utilisé le pipeline QIIME2 pour pour l'analyse des séquences et non DADA2, donc il est fort propable d'avoir des divergences dans la suite de l'analyse avec PhyloSeq. 
+
+
 ## **Package PhyloSeq**
 
 ```{r,echo= TRUE}
@@ -296,6 +299,69 @@ stopifnot( all(rownames(SAMP) %in% rownames(seqtab.nochim)) )
 ps <- phyloseq(OTU,TAX,SAMP)
 ps
 ```
+
+### **Arbre phylogénétique annoté** ###
+```{r}
+library(Biostrings)
+library(ape)
+library(phangorn)
+
+## Extraire les séquences 
+asv_seqs = getSequences(seqtab.nochim)
+
+## Créer les IDs d’ASV et les mettre en noms de colonnes
+asv_ids <- paste0("ASV", seq_along(asv_seqs))
+seqtab.nochim.phy = seqtab.nochim
+colnames(seqtab.nochim.phy) <- asv_ids
+
+dna_all <- DNAStringSet(asv_seqs)
+widths <- width(dna_all)
+table(widths)
+
+# Garder uniquement la longueur la plus fréquente
+main_len <- as.integer(names(sort(table(widths), decreasing = TRUE))[1])
+keep     <- which(widths == main_len)
+
+dna <- dna_all[keep]                       
+asv_ids <- paste0("ASV", seq_along(dna))
+names(dna) <- asv_ids
+
+# Filtrer la table d’abondance et la taxo 
+seqtab_filt <- seqtab.nochim[, keep, drop = FALSE]
+colnames(seqtab_filt) <- asv_ids
+
+taxa_filt <- taxa[keep, , drop = FALSE]    
+rownames(taxa_filt) <- asv_ids
+
+## Conversion en objet phangorn
+dna_phy <- as.phyDat(dna, type = "DNA")
+
+## Matrice de distances + arbre Neighbor-Joining
+dm     <- dist.ml(dna_phy)
+treeNJ <- NJ(dm)
+
+## Maximum likelihood (amélioration de l’arbre)
+fit  <- pml(treeNJ, data = dna_phy)
+fitG <- optim.pml(fit, model = "GTR", optInv = TRUE, optGamma = TRUE)
+
+treeML <- fitG$tree   # arbre final
+```
+
+```{r}
+OTU  <- otu_table(as.matrix(seqtab_filt), taxa_are_rows = FALSE)
+TAX  <- tax_table(as.matrix(taxa_filt))
+SAMP <- sample_data(meta_phy)
+TREE <- phy_tree(treeML)
+RS   <- refseq(dna)
+
+
+ps <- phyloseq(OTU, TAX, SAMP, TREE, RS)
+
+ps.Faecalibacterium <- subset_taxa(ps, Genus == "Faecalibacterium")
+
+plot_tree(ps.Faecalibacterium, color = "Group", label.tips = "Genus", size = "abundance")
+```
+
 ### **Alpha Diversité** ###
 ```{r,cache=TRUE}
 library(ggplot2)
@@ -311,9 +377,11 @@ p +
 
 ```
 
+On observe pas de différence sur la diversité alpha
+
 ### **Beta Diversité** ###
 ```{r,cache=TRUE}
-ord <- ordinate(ps, method = "PCoA", distance = "bray")
+ord <- ordinate(ps, method = "PCoA", distance = "unifrac")
 plot_ordination(ps, ord, color = "Group")
 ```
 
@@ -378,70 +446,7 @@ ggplot(dfG, aes(x = Group, y = Abundance, fill = Genus_clean)) +
   theme_bw()
 ```
 
-### **Arbre phylogénétique annoté** ###
-```{r,cache=TRUE}
-library(Biostrings)
-library(ape)
-library(phangorn)
-
-## Extraire les séquences 
-asv_seqs = getSequences(seqtab.nochim)
-
-## Créer les IDs d’ASV et les mettre en noms de colonnes
-asv_ids <- paste0("ASV", seq_along(asv_seqs))
-seqtab.nochim.phy = seqtab.nochim
-colnames(seqtab.nochim.phy) <- asv_ids
-
-dna_all <- DNAStringSet(asv_seqs)
-widths <- width(dna_all)
-table(widths)
-
-# Garder uniquement la longueur la plus fréquente
-main_len <- as.integer(names(sort(table(widths), decreasing = TRUE))[1])
-keep     <- which(widths == main_len)
-
-dna <- dna_all[keep]                       
-asv_ids <- paste0("ASV", seq_along(dna))
-names(dna) <- asv_ids
-
-# Filtrer la table d’abondance et la taxo 
-seqtab_filt <- seqtab.nochim[, keep, drop = FALSE]
-colnames(seqtab_filt) <- asv_ids
-
-taxa_filt <- taxa[keep, , drop = FALSE]    
-rownames(taxa_filt) <- asv_ids
-
-## Conversion en objet phangorn
-dna_phy <- as.phyDat(dna, type = "DNA")
-
-## Matrice de distances + arbre Neighbor-Joining
-dm     <- dist.ml(dna_phy)
-treeNJ <- NJ(dm)
-
-## Maximum likelihood (amélioration de l’arbre)
-fit  <- pml(treeNJ, data = dna_phy)
-fitG <- optim.pml(fit, model = "GTR", optInv = TRUE, optGamma = TRUE)
-
-treeML <- fitG$tree   # arbre final
-```
-
-```{r,cache=TRUE}
-OTU  <- otu_table(as.matrix(seqtab_filt), taxa_are_rows = FALSE)
-TAX  <- tax_table(as.matrix(taxa_filt))
-SAMP <- sample_data(meta_phy)
-TREE <- phy_tree(treeML)
-RS   <- refseq(dna)
-
-
-ps <- phyloseq(OTU, TAX, SAMP, TREE, RS)
-
-ps.Faecalibacterium <- subset_taxa(ps, Genus == "Faecalibacterium")
-
-plot_tree(ps.Faecalibacterium, color = "Group", label.tips = "Genus", size = "abundance")
-
-```
-
-### **Raréfaction ** ###
+### **Raréfaction** ###
 ```{r,cache=TRUE}
 ps.rare <- rarefy_even_depth(ps)
 ```
@@ -462,10 +467,11 @@ plot_ordination(ps.rare, ord_rare, color = "Group") +
   geom_point(size = 4)
 
 ```
+
 On observe bien qu'avec et sans raréfaction, on voit que les groupe HBC et LBC sont très proche
 
 
-### **La fonction plot network ** ###
+### **La fonction plot network** ###
 ```{r,cache=TRUE}
 ps_20 <- prune_taxa(taxa_sums(ps) > 20, ps)
 jg <- make_network(ps_20, type = "taxa", dist.fun = "bray",
@@ -473,10 +479,11 @@ jg <- make_network(ps_20, type = "taxa", dist.fun = "bray",
 plot_network(jg, ps_20, "taxa", color = "Phylum")
 
 ```
+
 On voit ici que le phylum "Bacillota" est majoritairement présent dans les différents groupes
 
 
-### **La heatmap ** ###
+### **La heatmap** ###
 ```{r,cache=TRUE}
 # Garder les 50 taxa les plus abondants
 ps_top <- prune_taxa(names(sort(taxa_sums(ps), decreasing = TRUE))[1:50], ps)
@@ -502,10 +509,11 @@ ggplot(df_mean, aes(x = Group, y = Genus, fill = Abundance)) +
 
 ```
 
+
 "Enterocloster" a une abondance relative bien supérieur au autres dans les groupe CON et HBC
 
 
-### **Statistique d'écart ** ###
+### **Statistique d'écart** ###
 ```{r, cache=TRUE}
 library(cluster)
 library(vegan)
@@ -524,6 +532,7 @@ gs <- clusGap(x2,
 print(gs, method = "Tibs2001SEmax")
 
 ```
+
 Ici, le nombre de cluster recommandé est 1
 
 ```{r, cache=TRUE}
@@ -573,4 +582,5 @@ print(gap, method = "Tibs2001SEmax")
 plot_clusgap(gs)
 
 ```
+
 On observe ici que les "gaps" sont proche de 0 ou négative ce qui signifie que le clustering est soit similaire à un nuage aléatoire, soit qu'il n'est pas plus compact.

@@ -499,6 +499,12 @@ head(taxa.print)
     ## [5,] "Ruminococcaceae"                       "Faecalibacterium"  
     ## [6,] "Lachnospiraceae"                       "Mediterraneibacter"
 
+Ici, on retrouve bien comme dans l’article le phylum majoritaire
+Bacillota (anciennement Firmicutes). Néanmoins, les auteurs ont utilisé
+le pipeline QIIME2 pour pour l’analyse des séquences et non DADA2, donc
+il est fort propable d’avoir des divergences dans la suite de l’analyse
+avec PhyloSeq.
+
 ## **Package PhyloSeq**
 
 ``` r
@@ -731,113 +737,25 @@ ps
     ## sample_data() Sample Data:       [ 15 samples by 7 sample variables ]
     ## tax_table()   Taxonomy Table:    [ 2251 taxa by 6 taxonomic ranks ]
 
-### **Alpha Diversité**
-
-``` r
-library(ggplot2)
-
-p <- plot_richness(ps,
-                   x = "Group",
-                   measures = c("Observed", "Shannon", "Simpson", "Chao1"),
-                   color = "Group")
-```
-
-    ## Warning: `aes_string()` was deprecated in ggplot2 3.0.0.
-    ## ℹ Please use tidy evaluation idioms with `aes()`.
-    ## ℹ See also `vignette("ggplot2-in-packages")` for more information.
-    ## ℹ The deprecated feature was likely used in the phyloseq package.
-    ##   Please report the issue at <https://github.com/joey711/phyloseq/issues>.
-    ## This warning is displayed once every 8 hours.
-    ## Call `lifecycle::last_lifecycle_warnings()` to see where this warning was
-    ## generated.
-
-``` r
-p + 
-  geom_boxplot(aes(fill = Group), alpha = 0.3, outlier.shape = NA) +
-  theme_bw()
-```
-
-![](Article_report_files/figure-gfm/unnamed-chunk-32-1.png)<!-- -->
-
-### **Beta Diversité**
-
-``` r
-ord <- ordinate(ps, method = "PCoA", distance = "bray")
-plot_ordination(ps, ord, color = "Group")
-```
-
-![](Article_report_files/figure-gfm/unnamed-chunk-33-1.png)<!-- -->
-
-### **Barplots de composition**
-
-``` r
-## Phylum + abondance relative
-ps_phylum <- tax_glom(ps, taxrank = "Phylum")
-ps_phylum_rel <- transform_sample_counts(ps_phylum, function(x) x / sum(x))
-
-## Moyenne par Group × Phylum
-dfP <- psmelt(ps_phylum_rel) %>%      # Sample, Group, Phylum, Abundance
-  group_by(Group, Phylum) %>%
-  summarise(Abundance = mean(Abundance), .groups = "drop")
-
-## Sélection des 10 phyla les plus abondants (globalement)
-top_phyla <- dfP %>%
-  group_by(Phylum) %>%
-  summarise(Abundance = mean(Abundance), .groups = "drop") %>%
-  arrange(desc(Abundance)) %>%
-  slice_head(n = 10) %>%
-  pull(Phylum)
-
-dfP$Phylum_clean <- ifelse(dfP$Phylum %in% top_phyla,
-                           as.character(dfP$Phylum),
-                           "Other")
-
-## Barplot : une barre par groupe, 10 phyla + Other
-ggplot(dfP, aes(x = Group, y = Abundance, fill = Phylum_clean)) +
-  geom_bar(stat = "identity", position = "fill") +
-  ylab("Relative abundance") +
-  theme_bw()
-```
-
-![](Article_report_files/figure-gfm/unnamed-chunk-34-1.png)<!-- -->
-
-``` r
-## Agglomérer au niveau Genre + abondance relative
-ps_genus <- tax_glom(ps, taxrank = "Genus")
-ps_genus_rel <- transform_sample_counts(ps_genus, function(x) x / sum(x))  
-
-## Extraire et moyenner par Groupe × Genre
-dfG <- psmelt(ps_genus_rel) %>%          
-  group_by(Group, Genus) %>%
-  summarise(Abundance = mean(Abundance), .groups = "drop")
-
-## Garde que les genres les plus abondants
-topN <- 10
-top_genus <- dfG %>%
-  group_by(Genus) %>%
-  summarise(Abundance = mean(Abundance), .groups = "drop") %>%
-  arrange(desc(Abundance)) %>%
-  slice_head(n = topN) %>%
-  pull(Genus)
-
-dfG$Genus_clean <- ifelse(dfG$Genus %in% top_genus,
-                          as.character(dfG$Genus),
-                          "Other")
-
-## Barplot 
-ggplot(dfG, aes(x = Group, y = Abundance, fill = Genus_clean)) +
-  geom_bar(stat = "identity", position = "fill") +
-  ylab("Relative abundance") +
-  theme_bw()
-```
-
-![](Article_report_files/figure-gfm/unnamed-chunk-35-1.png)<!-- -->
-
 ### **Arbre phylogénétique annoté**
 
 ``` r
 library(Biostrings)
 library(ape)
+```
+
+    ## 
+    ## Attaching package: 'ape'
+
+    ## The following object is masked from 'package:ShortRead':
+    ## 
+    ##     zoom
+
+    ## The following object is masked from 'package:Biostrings':
+    ## 
+    ##     complement
+
+``` r
 library(phangorn)
 
 ## Extraire les séquences 
@@ -927,9 +845,108 @@ plot_tree(ps.Faecalibacterium, color = "Group", label.tips = "Genus", size = "ab
     ## Call `lifecycle::last_lifecycle_warnings()` to see where this warning was
     ## generated.
 
+![](Article_report_files/figure-gfm/unnamed-chunk-33-1.png)<!-- -->
+
+### **Alpha Diversité**
+
+``` r
+library(ggplot2)
+
+p <- plot_richness(ps,
+                   x = "Group",
+                   measures = c("Observed", "Shannon", "Simpson", "Chao1"),
+                   color = "Group")
+
+p + 
+  geom_boxplot(aes(fill = Group), alpha = 0.3, outlier.shape = NA) +
+  theme_bw()
+```
+
+![](Article_report_files/figure-gfm/unnamed-chunk-34-1.png)<!-- -->
+
+On observe pas de différence sur la diversité alpha
+
+### **Beta Diversité**
+
+``` r
+ord <- ordinate(ps, method = "PCoA", distance = "unifrac")
+```
+
+    ## Warning in UniFrac(physeq, ...): Randomly assigning root as -- ASV703 -- in the
+    ## phylogenetic tree in the data you provided.
+
+``` r
+plot_ordination(ps, ord, color = "Group")
+```
+
+![](Article_report_files/figure-gfm/unnamed-chunk-35-1.png)<!-- -->
+
+### **Barplots de composition**
+
+``` r
+## Phylum + abondance relative
+ps_phylum <- tax_glom(ps, taxrank = "Phylum")
+ps_phylum_rel <- transform_sample_counts(ps_phylum, function(x) x / sum(x))
+
+## Moyenne par Group × Phylum
+dfP <- psmelt(ps_phylum_rel) %>%      # Sample, Group, Phylum, Abundance
+  group_by(Group, Phylum) %>%
+  summarise(Abundance = mean(Abundance), .groups = "drop")
+
+## Sélection des 10 phyla les plus abondants (globalement)
+top_phyla <- dfP %>%
+  group_by(Phylum) %>%
+  summarise(Abundance = mean(Abundance), .groups = "drop") %>%
+  arrange(desc(Abundance)) %>%
+  slice_head(n = 10) %>%
+  pull(Phylum)
+
+dfP$Phylum_clean <- ifelse(dfP$Phylum %in% top_phyla,
+                           as.character(dfP$Phylum),
+                           "Other")
+
+## Barplot : une barre par groupe, 10 phyla + Other
+ggplot(dfP, aes(x = Group, y = Abundance, fill = Phylum_clean)) +
+  geom_bar(stat = "identity", position = "fill") +
+  ylab("Relative abundance") +
+  theme_bw()
+```
+
+![](Article_report_files/figure-gfm/unnamed-chunk-36-1.png)<!-- -->
+
+``` r
+## Agglomérer au niveau Genre + abondance relative
+ps_genus <- tax_glom(ps, taxrank = "Genus")
+ps_genus_rel <- transform_sample_counts(ps_genus, function(x) x / sum(x))  
+
+## Extraire et moyenner par Groupe × Genre
+dfG <- psmelt(ps_genus_rel) %>%          
+  group_by(Group, Genus) %>%
+  summarise(Abundance = mean(Abundance), .groups = "drop")
+
+## Garde que les genres les plus abondants
+topN <- 10
+top_genus <- dfG %>%
+  group_by(Genus) %>%
+  summarise(Abundance = mean(Abundance), .groups = "drop") %>%
+  arrange(desc(Abundance)) %>%
+  slice_head(n = topN) %>%
+  pull(Genus)
+
+dfG$Genus_clean <- ifelse(dfG$Genus %in% top_genus,
+                          as.character(dfG$Genus),
+                          "Other")
+
+## Barplot 
+ggplot(dfG, aes(x = Group, y = Abundance, fill = Genus_clean)) +
+  geom_bar(stat = "identity", position = "fill") +
+  ylab("Relative abundance") +
+  theme_bw()
+```
+
 ![](Article_report_files/figure-gfm/unnamed-chunk-37-1.png)<!-- -->
 
-### **Raréfaction **
+### **Raréfaction**
 
 ``` r
 ps.rare <- rarefy_even_depth(ps)
@@ -976,11 +993,12 @@ plot_ordination(ps.rare, ord_rare, color = "Group") +
   geom_point(size = 4)
 ```
 
-![](Article_report_files/figure-gfm/unnamed-chunk-40-1.png)<!-- --> On
-observe bien qu’avec et sans raréfaction, on voit que les groupe HBC et
-LBC sont très proche
+![](Article_report_files/figure-gfm/unnamed-chunk-40-1.png)<!-- -->
 
-### **La fonction plot network **
+On observe bien qu’avec et sans raréfaction, on voit que les groupe HBC
+et LBC sont très proche
+
+### **La fonction plot network**
 
 ``` r
 ps_20 <- prune_taxa(taxa_sums(ps) > 20, ps)
@@ -1006,11 +1024,12 @@ plot_network(jg, ps_20, "taxa", color = "Phylum")
     ## Call `lifecycle::last_lifecycle_warnings()` to see where this warning was
     ## generated.
 
-![](Article_report_files/figure-gfm/unnamed-chunk-41-1.png)<!-- --> On
-voit ici que le phylum “Bacillota” est majoritairement présent dans les
-différents groupes
+![](Article_report_files/figure-gfm/unnamed-chunk-41-1.png)<!-- -->
 
-### **La heatmap **
+On voit ici que le phylum “Bacillota” est majoritairement présent dans
+les différents groupes
+
+### **La heatmap**
 
 ``` r
 # Garder les 50 taxa les plus abondants
@@ -1041,7 +1060,7 @@ ggplot(df_mean, aes(x = Group, y = Genus, fill = Abundance)) +
 “Enterocloster” a une abondance relative bien supérieur au autres dans
 les groupe CON et HBC
 
-### **Statistique d’écart **
+### **Statistique d’écart**
 
 ``` r
 library(cluster)
@@ -1148,7 +1167,8 @@ print(gap, method = "Tibs2001SEmax")
 plot_clusgap(gs)
 ```
 
-![](Article_report_files/figure-gfm/unnamed-chunk-46-1.png)<!-- --> On
-observe ici que les “gaps” sont proche de 0 ou négative ce qui signifie
-que le clustering est soit similaire à un nuage aléatoire, soit qu’il
-n’est pas plus compact.
+![](Article_report_files/figure-gfm/unnamed-chunk-46-1.png)<!-- -->
+
+On observe ici que les “gaps” sont proche de 0 ou négative ce qui
+signifie que le clustering est soit similaire à un nuage aléatoire, soit
+qu’il n’est pas plus compact.
