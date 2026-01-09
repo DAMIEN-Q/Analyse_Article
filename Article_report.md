@@ -827,25 +827,7 @@ TAX  <- tax_table(as.matrix(taxa_filt))
 SAMP <- sample_data(meta_phy)
 TREE <- phy_tree(treeML)
 RS   <- refseq(dna)
-
-
-ps <- phyloseq(OTU, TAX, SAMP, TREE, RS)
-
-ps.Faecalibacterium <- subset_taxa(ps, Genus == "Faecalibacterium")
-
-plot_tree(ps.Faecalibacterium, color = "Group", label.tips = "Genus", size = "abundance")
 ```
-
-    ## Warning: `aes_string()` was deprecated in ggplot2 3.0.0.
-    ## ℹ Please use tidy evaluation idioms with `aes()`.
-    ## ℹ See also `vignette("ggplot2-in-packages")` for more information.
-    ## ℹ The deprecated feature was likely used in the phyloseq package.
-    ##   Please report the issue at <https://github.com/joey711/phyloseq/issues>.
-    ## This warning is displayed once every 8 hours.
-    ## Call `lifecycle::last_lifecycle_warnings()` to see where this warning was
-    ## generated.
-
-![](Article_report_files/figure-gfm/unnamed-chunk-33-1.png)<!-- -->
 
 ### **Alpha Diversité**
 
@@ -914,6 +896,9 @@ ggplot(dfP, aes(x = Group, y = Abundance, fill = Phylum_clean)) +
 
 ![](Article_report_files/figure-gfm/unnamed-chunk-36-1.png)<!-- -->
 
+On observe ici que le phylum le plus abondant est Bacillota
+(anciennement Firmicutes), ce qui est en accord avec l’article
+
 ``` r
 ## Agglomérer au niveau Genre + abondance relative
 ps_genus <- tax_glom(ps, taxrank = "Genus")
@@ -945,6 +930,12 @@ ggplot(dfG, aes(x = Group, y = Abundance, fill = Genus_clean)) +
 ```
 
 ![](Article_report_files/figure-gfm/unnamed-chunk-37-1.png)<!-- -->
+
+Ici, le genre Faecalibacterium est beaucoup présente dans les 3 groupes
+(surtout dans le groupe LBC) ce qui est également en accord avec
+l’article. Néanmoins, d’autres genre sont représenté n’étant pas dans
+l’article ce qui est surement du au pipeline QIIME2 utilisé en plus dans
+l’article.
 
 ### **Raréfaction**
 
@@ -998,37 +989,6 @@ plot_ordination(ps.rare, ord_rare, color = "Group") +
 On observe bien qu’avec et sans raréfaction, on voit que les groupe HBC
 et LBC sont très proche
 
-### **La fonction plot network**
-
-``` r
-ps_20 <- prune_taxa(taxa_sums(ps) > 20, ps)
-jg <- make_network(ps_20, type = "taxa", dist.fun = "bray",
-                   max.dist = 0.7)
-plot_network(jg, ps_20, "taxa", color = "Phylum")
-```
-
-    ## Warning: `aes_string()` was deprecated in ggplot2 3.0.0.
-    ## ℹ Please use tidy evaluation idioms with `aes()`.
-    ## ℹ See also `vignette("ggplot2-in-packages")` for more information.
-    ## ℹ The deprecated feature was likely used in the phyloseq package.
-    ##   Please report the issue at <https://github.com/joey711/phyloseq/issues>.
-    ## This warning is displayed once every 8 hours.
-    ## Call `lifecycle::last_lifecycle_warnings()` to see where this warning was
-    ## generated.
-
-    ## Warning: Using `size` aesthetic for lines was deprecated in ggplot2 3.4.0.
-    ## ℹ Please use `linewidth` instead.
-    ## ℹ The deprecated feature was likely used in the phyloseq package.
-    ##   Please report the issue at <https://github.com/joey711/phyloseq/issues>.
-    ## This warning is displayed once every 8 hours.
-    ## Call `lifecycle::last_lifecycle_warnings()` to see where this warning was
-    ## generated.
-
-![](Article_report_files/figure-gfm/unnamed-chunk-41-1.png)<!-- -->
-
-On voit ici que le phylum “Bacillota” est majoritairement présent dans
-les différents groupes
-
 ### **La heatmap**
 
 ``` r
@@ -1055,28 +1015,17 @@ ggplot(df_mean, aes(x = Group, y = Genus, fill = Abundance)) +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 ```
 
-![](Article_report_files/figure-gfm/unnamed-chunk-42-1.png)<!-- -->
+![](Article_report_files/figure-gfm/unnamed-chunk-41-1.png)<!-- -->
 
-“Enterocloster” a une abondance relative bien supérieur au autres dans
-les groupe CON et HBC
+“Enterocloster” a une abondance relative bien supérieur aux autres dans
+les groupes CON et HBC
 
 ### **Statistique d’écart**
 
 ``` r
 library(cluster)
 library(vegan)
-```
 
-    ## Loading required package: permute
-
-    ## 
-    ## Attaching package: 'vegan'
-
-    ## The following objects are masked from 'package:phangorn':
-    ## 
-    ##     diversity, treedist
-
-``` r
 ord <- ordinate(ps, method = "PCoA", distance = "bray")
 x <- ord$vectors
 x2 <- x[, 1:2]
@@ -1095,13 +1044,13 @@ print(gs, method = "Tibs2001SEmax")
     ## clusGap(x = x2, FUNcluster = pam1, K.max = 6, B = 50)
     ## B=50 simulated reference sets, k = 1..6; spaceH0="scaledPCA"
     ##  --> Number of clusters (method 'Tibs2001SEmax', SE.factor=1): 1
-    ##             logW     E.logW         gap     SE.sim
-    ## [1,]  0.21845859  0.1749525 -0.04350613 0.09446934
-    ## [2,] -0.06945245 -0.2208889 -0.15143643 0.10591954
-    ## [3,] -0.52312533 -0.5774425 -0.05431714 0.09749973
-    ## [4,] -0.89138850 -0.8491469  0.04224164 0.12518386
-    ## [5,] -1.16253692 -1.1143641  0.04817282 0.13637115
-    ## [6,] -1.48396723 -1.3490658  0.13490139 0.16115896
+    ##            logW      E.logW         gap     SE.sim
+    ## [1,]  0.1105746  0.08218262 -0.02839202 0.09521015
+    ## [2,] -0.2063059 -0.31642626 -0.11012037 0.10855375
+    ## [3,] -0.4351264 -0.67238204 -0.23725563 0.10534073
+    ## [4,] -0.6725382 -0.94477258 -0.27223436 0.12018430
+    ## [5,] -0.9808038 -1.21146293 -0.23065913 0.13872740
+    ## [6,] -1.2777016 -1.44300231 -0.16530067 0.16451295
 
 Ici, le nombre de cluster recommandé est 1
 
@@ -1155,19 +1104,19 @@ print(gap, method = "Tibs2001SEmax")
     ## clusGap(x = x_3, FUNcluster = FUNcluster, K.max = K.max, B = B, verbose = verbose)
     ## B=50 simulated reference sets, k = 1..6; spaceH0="scaledPCA"
     ##  --> Number of clusters (method 'Tibs2001SEmax', SE.factor=1): 1
-    ##             logW     E.logW         gap    SE.sim
-    ## [1,]  0.21845859  0.1934631 -0.02499551 0.1025612
-    ## [2,] -0.06945245 -0.2058074 -0.13635499 0.1221872
-    ## [3,] -0.52312533 -0.5721363 -0.04901100 0.1259239
-    ## [4,] -0.89138850 -0.8526790  0.03870950 0.1292941
-    ## [5,] -1.16253692 -1.1090601  0.05347682 0.1433906
-    ## [6,] -1.48396723 -1.3426463  0.14132091 0.1628891
+    ##            logW     E.logW         gap    SE.sim
+    ## [1,]  0.1105746  0.1008348 -0.00973979 0.1038723
+    ## [2,] -0.2063059 -0.3092269 -0.10292103 0.1254895
+    ## [3,] -0.4351264 -0.6677610 -0.23263463 0.1208560
+    ## [4,] -0.6725382 -0.9498649 -0.27732666 0.1286946
+    ## [5,] -0.9808038 -1.2025623 -0.22175848 0.1403930
+    ## [6,] -1.2777016 -1.4349060 -0.15720439 0.1577514
 
 ``` r
 plot_clusgap(gs)
 ```
 
-![](Article_report_files/figure-gfm/unnamed-chunk-46-1.png)<!-- -->
+![](Article_report_files/figure-gfm/unnamed-chunk-45-1.png)<!-- -->
 
 On observe ici que les “gaps” sont proche de 0 ou négative ce qui
 signifie que le clustering est soit similaire à un nuage aléatoire, soit

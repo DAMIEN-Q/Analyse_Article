@@ -354,12 +354,6 @@ SAMP <- sample_data(meta_phy)
 TREE <- phy_tree(treeML)
 RS   <- refseq(dna)
 
-
-ps <- phyloseq(OTU, TAX, SAMP, TREE, RS)
-
-ps.Faecalibacterium <- subset_taxa(ps, Genus == "Faecalibacterium")
-
-plot_tree(ps.Faecalibacterium, color = "Group", label.tips = "Genus", size = "abundance")
 ```
 
 ### **Alpha Diversité** ###
@@ -416,6 +410,9 @@ ggplot(dfP, aes(x = Group, y = Abundance, fill = Phylum_clean)) +
 
 ```
 
+On observe ici que le phylum le plus abondant est Bacillota (anciennement Firmicutes), ce qui est en accord avec l'article
+
+
 ```{r,cache=TRUE}
 ## Agglomérer au niveau Genre + abondance relative
 ps_genus <- tax_glom(ps, taxrank = "Genus")
@@ -446,6 +443,9 @@ ggplot(dfG, aes(x = Group, y = Abundance, fill = Genus_clean)) +
   theme_bw()
 ```
 
+Ici, le genre Faecalibacterium est beaucoup présente dans les 3 groupes (surtout dans le groupe LBC) ce qui est également en accord avec l'article. Néanmoins, d'autres genre sont représenté n'étant pas dans l'article ce qui est surement du au pipeline QIIME2 utilisé en plus dans l'article.
+
+
 ### **Raréfaction** ###
 ```{r,cache=TRUE}
 ps.rare <- rarefy_even_depth(ps)
@@ -469,19 +469,6 @@ plot_ordination(ps.rare, ord_rare, color = "Group") +
 ```
 
 On observe bien qu'avec et sans raréfaction, on voit que les groupe HBC et LBC sont très proche
-
-
-### **La fonction plot network** ###
-```{r,cache=TRUE}
-ps_20 <- prune_taxa(taxa_sums(ps) > 20, ps)
-jg <- make_network(ps_20, type = "taxa", dist.fun = "bray",
-                   max.dist = 0.7)
-plot_network(jg, ps_20, "taxa", color = "Phylum")
-
-```
-
-On voit ici que le phylum "Bacillota" est majoritairement présent dans les différents groupes
-
 
 ### **La heatmap** ###
 ```{r,cache=TRUE}
@@ -510,7 +497,7 @@ ggplot(df_mean, aes(x = Group, y = Genus, fill = Abundance)) +
 ```
 
 
-"Enterocloster" a une abondance relative bien supérieur au autres dans les groupe CON et HBC
+"Enterocloster" a une abondance relative bien supérieur aux autres dans les groupes CON et HBC
 
 
 ### **Statistique d'écart** ###

@@ -21,3 +21,6 @@ scales
 dplyr
 ape
 phangorn
+cluster
+permute
+vegan
